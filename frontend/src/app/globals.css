@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --p1: #4f8ef7;
+  --p2: #e85c5c;
+  --p3: #4cbe8a;
+  --p4: #f0a030;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: #0f1117;
+  color: #f0f0f0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #1a1d27; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+/* Player colour utilities */
+.text-p1 { color: var(--p1); }
+.text-p2 { color: var(--p2); }
+.text-p3 { color: var(--p3); }
+.text-p4 { color: var(--p4); }
+
+.bg-p1 { background-color: var(--p1); }
+.bg-p2 { background-color: var(--p2); }
+.bg-p3 { background-color: var(--p3); }
+.bg-p4 { background-color: var(--p4); }
+
+.border-p1 { border-color: var(--p1); }
+.border-p2 { border-color: var(--p2); }
+.border-p3 { border-color: var(--p3); }
+.border-p4 { border-color: var(--p4); }
+
+/* Cell explosion flash */
+@keyframes cell-explode {
+  0%   { background-color: transparent; transform: scale(1); }
+  30%  { background-color: rgba(255,220,50,0.55); transform: scale(1.18); }
+  100% { background-color: transparent; transform: scale(1); }
+}
+
+.animate-cell-explode {
+  animation: cell-explode 430ms ease-out forwards;
+}
+
+/* Orb pop-in */
+@keyframes orb-pop {
+  0%   { transform: scale(0); opacity: 0; }
+  55%  { transform: scale(1.35); opacity: 1; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+.animate-orb-pop {
+  animation: orb-pop 200ms ease-out forwards;
+}
+
+/* Critical-mass pulsing ring */
+@keyframes pulse-warn {
+  0%, 100% { box-shadow: 0 0 0 0px rgba(255,200,40,0); }
+  50%       { box-shadow: 0 0 0 4px rgba(255,200,40,0.45); }
+}
+
+.animate-pulse-warn {
+  animation: pulse-warn 1.3s ease-in-out infinite;
+}
