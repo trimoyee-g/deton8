@@ -30,14 +30,18 @@ io.on("connection", (socket) => {
       playerCount,
       rows,
       cols,
+      timedMode,
+      timePerTurn,
     }: {
       playerName: string;
       playerCount: number;
       rows: number;
       cols: number;
+      timedMode: boolean;
+      timePerTurn: number;
     }) => {
       try {
-        const room = roomManager.createRoom(socket.id, playerName, playerCount, rows, cols);
+        const room = roomManager.createRoom(socket.id, playerName, playerCount, rows, cols, timedMode, timePerTurn);
         socket.join(room.code);
         socket.emit("roomCreated", {
           roomCode: room.code,
@@ -74,7 +78,11 @@ io.on("connection", (socket) => {
     if (result.room.state.players.length === result.room.maxPlayers) {
       const gameState = roomManager.startGame(roomCode);
       if (gameState) {
-        io.to(roomCode).emit("gameStarted", { state: gameState });
+        io.to(roomCode).emit("gameStarted", {
+          state: gameState,
+          timedMode: result.room.timedMode,
+          timePerTurn: result.room.timePerTurn,
+        });
       }
     }
   });
@@ -91,7 +99,13 @@ io.on("connection", (socket) => {
       return;
     }
     const gameState = roomManager.startGame(roomCode);
-    if (gameState) io.to(roomCode).emit("gameStarted", { state: gameState });
+    if (gameState) {
+      io.to(roomCode).emit("gameStarted", {
+        state: gameState,
+        timedMode: room.timedMode,
+        timePerTurn: room.timePerTurn,
+      });
+    }
   });
 
   // ── Make a move ──────────────────────────────────────────────────────────────
@@ -112,6 +126,13 @@ io.on("connection", (socket) => {
         result.state.players.find((p) => p.id === result.state.winner)?.name ?? "Unknown";
       io.to(room.code).emit("gameOver", { winner: result.state.winner, winnerName });
     }
+  });
+
+  // ── Skip turn (timed mode) ───────────────────────────────────────────────────
+  socket.on("skipTurn", () => {
+    const result = roomManager.skipTurnInRoom(socket.id);
+    if (!result.success) return;
+    io.to(result.room.code).emit("gameStateUpdate", { state: result.state });
   });
 
   // ── Chat ─────────────────────────────────────────────────────────────────────
@@ -137,16 +158,29 @@ io.on("connection", (socket) => {
   // ── Disconnect ───────────────────────────────────────────────────────────────
   socket.on("disconnect", () => {
     console.log(`[-] ${socket.id} disconnected`);
+    const leavingRoom = roomManager.getRoomBySocket(socket.id);
+    const leavingPlayer = leavingRoom?.state.players.find((p) => p.socketId === socket.id);
     const result = roomManager.removePlayer(socket.id);
     if (result) {
       io.to(result.code).emit("playerLeft", {
         players: result.room.state.players,
+        leftPlayerName: leavingPlayer?.name ?? "A player",
       });
+      // Always sync game state so sidebar reflects departure
+      if (result.room.state.status === "playing" || result.winner) {
+        io.to(result.code).emit("gameStateUpdate", { state: result.room.state });
+      }
+      if (result.winner) {
+        io.to(result.code).emit("gameOver", {
+          winner: result.winner.id,
+          winnerName: result.winner.name,
+        });
+      }
     }
   });
 });
 
 const PORT = parseInt(process.env.PORT ?? "4000", 10);
 httpServer.listen(PORT, () => {
-  console.log(`Chain Reaction backend running on http://localhost:${PORT}`);
+  console.log(`Deton8 backend running on http://localhost:${PORT}`);
 });
