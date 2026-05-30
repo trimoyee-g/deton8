@@ -1,14 +1,18 @@
 <div align="center">
 
 # 💥 Deton8
+[🎮 Play Live Demo](https://deton8.vercel.app)
+
 
 **The classic Chain Reaction board game — reimagined for the web.**
 
-[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org)
-[![Node.js](https://img.shields.io/badge/Node.js-18+-green?logo=node.js)](https://nodejs.org)
-[![Socket.io](https://img.shields.io/badge/Socket.io-4.6-black?logo=socket.io)](https://socket.io)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://typescriptlang.org)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-38bdf8?logo=tailwindcss)](https://tailwindcss.com)
+A full-stack multiplayer board game built with Next.js, Node.js, and Socket.io. Designed for real-time online play, AI opponents, timed turns, and a fully immersive 3D board experience — all running in the browser with zero plugins.
+
+[![Next.js](https://img.shields.io/badge/Next.js-14-black?style=flat-square&logo=next.js)](https://nextjs.org)
+[![Node.js](https://img.shields.io/badge/Node.js-20-green?style=flat-square&logo=node.js)](https://nodejs.org)
+[![Socket.io](https://img.shields.io/badge/Socket.io-4.6-black?style=flat-square&logo=socket.io)](https://socket.io)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat-square&logo=typescript)](https://typescriptlang.org)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-38bdf8?style=flat-square&logo=tailwindcss)](https://tailwindcss.com)
 
 *Place orbs. Reach critical mass. Explode.*
 
@@ -19,15 +23,18 @@
 ## Table of Contents
 
 - [Overview](#overview)
-- [Architecture](#architecture)
-- [Tech Stack](#tech-stack)
+- [Screenshots](#screenshots)
 - [Features](#features)
 - [Game Rules](#game-rules)
+- [Tech Stack](#tech-stack)
+- [Architecture](#architecture)
 - [AI Implementation](#ai-implementation)
+- [Key Design Decisions](#key-design-decisions)
 - [Docker](#docker)
 - [Getting Started](#getting-started)
 - [Environment Variables](#environment-variables)
 - [Deployment](#deployment)
+- [Contributing](#contributing)
 
 ---
 
@@ -35,47 +42,67 @@
 
 Deton8 is a full-stack implementation of the chain reaction board game. Players take turns placing orbs on a grid; when a cell hits its critical mass it explodes, sending orbs to neighbours and potentially triggering a cascade. The last player with orbs on the board wins.
 
-Three modes are supported out of the box: **Hot Seat** (2–4 players, one screen), **vs Computer** (easy / medium AI), and **Online Multiplayer** (real-time via WebSockets and room codes).
+Three modes are supported out of the box: **Hot Seat** (2–4 players, one screen), **vs Computer** (easy / medium AI), and **Online Multiplayer** (real-time via WebSockets and 5-letter room codes). All three modes support optional timed turns with per-player countdowns.
 
 ---
 
-## Architecture
+## Screenshots
 
-```
-┌─────────────────────────────────────────────────────┐
-│                  Browser (Next.js)                  │
-│                                                     │
-│   page.tsx ──► sessionStorage ──► game/page.tsx     │
-│                                        │            │
-│                                   useGame hook      │
-│                                   /         \       │
-│                         local modes         online mode
-│                         /       \                │  │
-│                   gameEngine   aiPlayer    socketClient
-│                 (pure logic)   (greedy AI)       │  │
-└──────────────────────────────────────────────────┼──┘
-                                                   │
-                                              WebSocket
-                                            (Socket.io)
-                                                   │
-┌──────────────────────────────────────────────────┼──┐
-│                Node.js Backend                   │  │
-│                                                  │  │
-│         Express + Socket.io server ◄─────────────┘  │
-│                    │                                 │
-│             roomManager                             │
-│           (room & player state)                     │
-│                    │                                 │
-│              gameEngine                             │
-│           (source of truth)                         │
-└─────────────────────────────────────────────────────┘
-```
+| Home | Hot Seat |
+|------|----------|
+| ![](docs/home.png) | ![](docs/hotSeat.png) |
 
-**Hot Seat / vs Computer** — runs entirely in the browser. The backend is not involved.
+| vs Computer | Multiplayer |
+|-------------|-------------|
+| ![](docs/vsComputer.png) | ![](docs/onlineMultiplayer.png) |
 
-**Online Multiplayer** — the browser sends moves to the backend over WebSockets. The backend runs `gameEngine.ts` as the authoritative source of truth and broadcasts state updates to all players in the room.
+---
 
-`gameEngine.ts` is **pure functions with no side effects** and is duplicated in both packages so each side can run it independently.
+## Features
+
+### Three game modes
+
+**Hot Seat** — 2–4 players take turns on the same screen. No account or server required.
+
+**vs Computer** — Play against an Easy (random valid move) or Medium (greedy heuristic AI) opponent. The AI runs fully in the browser with no network calls.
+
+**Online Multiplayer** — Create a room, share the 5-letter code, and play in real-time over WebSockets. The backend is the authoritative source of truth for all game state. Supports 2–4 players per room.
+
+### Timed mode
+
+An optional per-turn countdown (10 / 15 / 20 / 30 seconds) available in all three game modes. A live SVG ring indicator ticks down with the current player's colour. When time expires, the turn is automatically skipped. In online mode the skip is backend-authoritative — only the active player's client emits the skip event, and all clients wait for the broadcast to reset their timers. Undo does not reset the countdown.
+
+### Disconnect handling
+
+If a player closes their tab or loses connection during an online game, the remaining player is immediately declared the winner. A system message appears in the chat panel naming who left.
+
+### Single undo
+
+Roll back your last move once per turn. The undo button is disabled after use and re-enables on the next turn. Does not reset the turn timer.
+
+### In-game chat
+
+A collapsible chat panel with quick emoji reactions, unread message badge, auto-scroll, and message alignment matching standard chat conventions (own messages right-aligned, others left-aligned). System events (game start, player left, time up) appear as centred italicised notices.
+
+### Sound effects
+
+Procedural Web Audio synthesis — no audio files. Four events: orb placement (short click), chain explosion (low boom), urgent tick (last 3 seconds), and win fanfare. All sounds are generated at runtime via the oscillator and gain APIs.
+
+### 3D board
+
+CSS `perspective` and per-cell `box-shadow` depth walls create a 3D tray effect. Orbs use a radial gradient with a bright top-left highlight and dark bottom-right shadow to simulate a sphere. Critical-mass cells pulse with a warning glow; exploding cells animate outward.
+
+---
+
+## Game Rules
+
+1. Players take turns placing one orb in any **empty cell** or a **cell they already own**.
+2. Each cell has a **critical mass** equal to its number of adjacent cells:
+    - Corner cell → 2 &nbsp;|&nbsp; Edge cell → 3 &nbsp;|&nbsp; Interior cell → 4
+3. When a cell reaches critical mass it **explodes** — all its orbs spread to each neighbour, converting them to the current player's colour.
+4. Explosions cascade until no cell is overloaded (chain reactions).
+5. A player is **eliminated** once they have no orbs left on the board (immunity applies until every player has placed their first orb).
+6. Last player standing **wins**.
 
 ---
 
@@ -84,82 +111,163 @@ Three modes are supported out of the box: **Hot Seat** (2–4 players, one scree
 | Layer | Technology |
 |---|---|
 | Frontend framework | Next.js 14 (App Router) |
-| Styling | Tailwind CSS + CSS custom properties |
-| Real-time comms | Socket.io (client `4.6.2`) |
-| Backend | Node.js + Express + Socket.io |
+| Styling | Tailwind CSS + inline CSS custom properties |
+| Real-time comms | Socket.io client `4.6.2` |
+| Backend | Node.js + Express + Socket.io server |
 | Language | TypeScript (strict) throughout |
-| Sound | Web Audio API (no dependencies) |
-| 3D rendering | CSS `perspective` + `box-shadow` depth trick |
+| Sound | Web Audio API — procedural synthesis, zero dependencies |
+| 3D board | CSS `perspective` + `box-shadow` depth walls |
+| Orb rendering | Radial-gradient sphere illusion |
 | AI | One-ply greedy with fast positional pre-filter |
+| Containerisation | Docker + Docker Compose |
+| CI/CD | GitHub Actions → Docker Hub |
 
 ---
 
-## Features
+## Architecture
 
-- **Hot Seat** — 2–4 players take turns on the same screen
-- **vs Computer** — Easy (random valid move) or Medium (greedy heuristic AI)
-- **Online Multiplayer** — Real-time rooms with 5-letter codes; chat included
-- **Timed mode** — Per-turn countdown (10 / 15 / 20 / 30 s) with an SVG ring indicator; auto-skip on timeout; works in all three modes
-- **Disconnect handling** — If a player leaves mid-game, the remaining player is immediately declared the winner
-- **Single Undo** — Roll back your last move (one undo per turn, clears after use; does not reset the timer)
-- **Sound effects** — Procedural Web Audio: place, explode, tick, win
-- **3D board** — CSS perspective with box-shadow depth walls and radial-gradient sphere orbs
-- **In-game chat** — Collapsible panel, quick emoji reactions, AI taunts; own messages right-aligned
-- **Win screen** — CSS confetti, player-colored glow ring, Play Again / Main Menu
+### Hot Seat / vs Computer — Local Path
 
----
+```
+React Frontend (Next.js)
+      │
+      │  sessionStorage passes GameConfig from setup → game page
+      ▼
+useGame hook
+      │
+      ├─ gameEngine.ts  (pure functions — applyMove, criticalMass, skipTurn)
+      │        │
+      │        └─ chain reactions resolved synchronously, state immutable
+      │
+      ├─ aiPlayer.ts    (vs Computer mode only)
+      │        │
+      │        └─ two-stage greedy: heuristic pre-filter → simulate top N
+      │
+      └─ soundEngine.ts (Web Audio API — no dependencies)
 
-## Game Rules
+No backend involved. Runs entirely in the browser.
+```
 
-1. Players take turns placing one orb in any **empty cell** or a **cell they already own**.
-2. Each cell has a **critical mass** equal to its number of adjacent cells:
-   - Corner cell → 2 &nbsp;|&nbsp; Edge cell → 3 &nbsp;|&nbsp; Interior cell → 4
-3. When a cell reaches critical mass it **explodes** — all its orbs spread to each neighbour, converting them to the current player's colour.
-4. Chain reactions cascade until no cell is overloaded.
-5. A player is **eliminated** once they have no orbs left (after everyone has placed their first orb).
-6. Last player standing **wins**.
+### Online Multiplayer — Network Path
+
+```
+Player A (Browser)                    Player B (Browser)
+      │                                      │
+      │  emit("makeMove", { r, c })          │
+      ▼                                      ▼
+      └──────────────┐          ┌────────────┘
+                     │          │
+              Socket.io (WebSocket / polling)
+                     │
+                     ▼
+            Node.js + Express Backend
+                     │
+              roomManager.ts
+                     │
+                     ├─ validate: correct player, valid cell
+                     ├─ gameEngine.ts  ← source of truth
+                     │        │
+                     │        └─ applyMove → resolves chain reactions
+                     │
+                     └─ broadcast("gameStateUpdate") → all players in room
+```
+
+### Timed Mode — Turn Skip Path
+
+```
+Client-side countdown (useGame hook)
+      │
+      │  timeLeft reaches 0
+      ▼
+      ├─ [online]  emit("skipTurn")  → backend validates + skips + broadcasts
+      └─ [local]   skipTurn(gameState) called directly in hook
+```
+
+Only the client whose turn it is emits `skipTurn` in online mode. All clients wait for the authoritative `gameStateUpdate` broadcast to reset their timers — preventing desync.
+
+### Disconnect Handling
+
+```
+Player disconnects (socket "disconnect" event)
+      │
+      ▼
+roomManager.removePlayer()
+      │
+      ├─ game was in progress AND only 1 player remains?
+      │        │ YES
+      │        └─ set status = "finished", winner = remaining player
+      │
+      └─ broadcast:
+           ├─ "playerLeft"      → show system message in chat
+           ├─ "gameStateUpdate" → sync sidebar
+           └─ "gameOver"        → trigger win screen (if winner set)
+```
+
+### Game Engine Design
+
+`gameEngine.ts` is **pure functions with no side effects** and is duplicated in both `frontend/src/lib/` and `backend/src/`. Local modes run it entirely in the browser; the backend runs it as the authoritative source in online mode. Both sides always execute identical logic.
 
 ---
 
 ## AI Implementation
 
-No LLM involved — pure combinatorial search.
+Pure combinatorial search — no external AI services or LLMs.
 
-**Easy**: picks a random valid move.
+**Easy** — picks a uniformly random valid move.
 
-**Medium** (one-ply greedy):
-1. Score every valid move with a fast positional heuristic (prefers cells near critical mass, punishes moves that hand the opponent an immediate chain).
+**Medium** — one-ply greedy with a two-stage approach:
+
+1. Score every valid move with a fast positional heuristic. Prefers cells already near critical mass (maximises chain potential) and penalises moves that hand the opponent an immediate chain trigger.
 2. Take the top 6 candidates by heuristic score.
-3. Simulate each with the full `placeOrb` engine and score the resulting board state (own orbs − opponent orbs + weighted critical-mass cells).
+3. Simulate each candidate with the full `applyMove` engine and score the resulting board state: own orb count − opponent orb count + weighted bonus for owning cells at critical mass − 1.
 4. Pick the move with the best simulated outcome.
 
-The two-stage approach keeps AI latency under ~5 ms even on packed boards where there are 40+ valid moves.
+The two-stage approach keeps AI response time under ~5 ms even on dense boards with 40+ valid moves, by avoiding a full simulation pass over every candidate.
+
+---
+
+## Key Design Decisions
+
+**Pure game engine shared between client and server** — `gameEngine.ts` is a file of pure functions with no imports, no side effects, and no framework dependencies. It is copied verbatim into both packages. Local modes run it in the browser; online mode runs it on the server as the source of truth. This eliminates client/server logic divergence entirely.
+
+**`sessionStorage` for config passing** — the setup page writes `GameConfig` to `sessionStorage` and the game page reads it on mount. This avoids URL query parameters (which would expose config in the address bar and complicate sharing) and avoids a global state store (which adds complexity for a single hand-off).
+
+**Backend-authoritative turn skipping in timed mode** — only the client whose turn it is emits `skipTurn`. The backend validates, advances the state, and broadcasts to all clients. This prevents desync: two clients cannot independently decide to skip the same turn, and a slow client cannot skip someone else's turn early.
+
+**Undo without timer reset** — undo reverts the game state but does not restart the countdown. The timer continues from wherever it was, keeping competitive play fair.
+
+**Disconnect-to-win** — when a player disconnects mid-game, the backend immediately sets `status: "finished"` and assigns the winner before broadcasting. Clients receive a `gameStateUpdate` followed by `gameOver`, so the win screen appears without any client-side polling or timeout.
+
+**Procedural sound via Web Audio API** — avoids shipping audio files (which add bundle size and require CDN hosting). All sounds are synthesised at runtime using oscillators and gain envelopes. The engine lazily creates an `AudioContext` on first interaction to comply with browser autoplay policies.
 
 ---
 
 ## Docker
 
-The fastest way to run Deton8 locally is with Docker Compose:
+### Start the stack
 
 ```bash
-git clone https://github.com/your-username/deton8.git
+git clone https://github.com/trimoyeeg/deton8.git
 cd deton8/chain-reaction
-docker compose up --build
+docker compose up -d --build
 ```
 
-Then open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000) — done.
 
-> **Note:** `NEXT_PUBLIC_BACKEND_URL` is baked into the frontend bundle at build time.
-> If your backend is hosted elsewhere, pass it as a build arg:
-> ```bash
-> docker compose build --build-arg NEXT_PUBLIC_BACKEND_URL=https://your-backend.com frontend
-> ```
-
-To run only the backend (e.g. if you're developing the frontend locally):
+### Pull latest images
 
 ```bash
-docker compose up backend
+docker compose pull
+docker compose up -d
 ```
+
+### Stop the stack
+
+```bash
+docker compose down
+```
+
+Images are built and published to Docker Hub automatically on every push to `main` via GitHub Actions.
 
 ---
 
@@ -167,7 +275,7 @@ docker compose up backend
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 
 ### Backend
 
@@ -203,27 +311,28 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 | Variable | Default | Description |
 |---|---|---|
-| `NEXT_PUBLIC_BACKEND_URL` | `http://localhost:4000` | Backend WebSocket URL (set in frontend) |
-| `PORT` | `4000` | Backend port |
+| `NEXT_PUBLIC_BACKEND_URL` | `http://localhost:4000` | Backend WebSocket URL, baked into the frontend bundle at build time |
+| `PORT` | `4000` | Backend listening port |
 
 ---
 
 ## Deployment
 
-### Frontend → Vercel
+The frontend is deployed on Vercel and the backend on Railway.
+GitHub Actions automatically builds and publishes Docker images to Docker Hub on every push to `main`.
+> Hot Seat and vs Computer work on the Vercel frontend alone — no backend needed.
 
-1. Push the repo to GitHub.
-2. Import the repo in [Vercel](https://vercel.com). Set **Root Directory** to `chain-reaction/frontend`.
-3. Add environment variable `NEXT_PUBLIC_BACKEND_URL` pointing to your deployed backend URL.
-4. Deploy.
+---
 
-### Backend → Railway / Render / Fly.io
+## Contributing
 
-Any platform that runs a Node.js process works. Example for [Railway](https://railway.app):
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Commit your changes
+4. Push and open a pull request
 
-1. Create a new project → Deploy from GitHub repo.
-2. Set **Root Directory** to `chain-reaction/backend`.
-3. Set start command: `npm start` (runs the compiled build).
-4. Railway auto-assigns a public URL — paste it into Vercel's `NEXT_PUBLIC_BACKEND_URL`.
+---
 
-> Hot Seat and vs Computer work on the Vercel frontend alone (no backend needed).
+<div align="center">
+Built to explode.
+</div>
