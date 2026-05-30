@@ -5,6 +5,10 @@ interface Props {
   gameState: GameState;
   myPlayerId: Player | null;
   roomCode: string | null;
+  timeLeft: number;
+  timePerTurn: number;
+  canUndo: boolean;
+  onUndo: () => void;
   onReset: () => void;
   onHome: () => void;
 }
@@ -74,15 +78,19 @@ function PlayerCard({
   );
 }
 
-export default function Sidebar({ gameState, myPlayerId, roomCode, onReset, onHome }: Props) {
+export default function Sidebar({ gameState, myPlayerId, roomCode, timeLeft, timePerTurn, canUndo, onUndo, onReset, onHome }: Props) {
   const alivePlayers = gameState.players.filter((p) => p.alive);
+  const currentColor = PLAYER_COLORS[gameState.currentPlayer] ?? "#fff";
+  // SVG circle: r=15, circumference ≈ 94.25
+  const CIRC = 94.25;
+  const dashOffset = CIRC * (1 - timeLeft / timePerTurn);
 
   return (
     <aside className="flex flex-col gap-5 w-52 flex-shrink-0">
       {/* Title */}
       <div>
         <h1 className="text-lg font-bold tracking-tight bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-          Chain Reaction
+          Deton8
         </h1>
         {roomCode && (
           <p className="text-xs text-gray-500 mt-0.5">
@@ -118,13 +126,47 @@ export default function Sidebar({ gameState, myPlayerId, roomCode, onReset, onHo
         <div className="flex justify-between text-sm">
           <span className="text-gray-500">Board</span>
           <span className="text-gray-200 font-semibold">
-            {gameState.cols}×{gameState.rows}
+            {gameState.rows}×{gameState.cols}
           </span>
         </div>
       </div>
 
+      {/* Timer ring */}
+      {timeLeft > 0 && gameState.status === "playing" && (
+        <div className="flex flex-col items-center gap-1">
+          <div className="relative w-16 h-16">
+            <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+              <circle cx="18" cy="18" r="15" fill="none" stroke="#1f2937" strokeWidth="2.5" />
+              <circle
+                cx="18" cy="18" r="15"
+                fill="none"
+                stroke={timeLeft <= 4 ? "#ef4444" : currentColor}
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeDasharray={CIRC}
+                strokeDashoffset={isNaN(dashOffset) ? 0 : dashOffset}
+                style={{ transition: "stroke-dashoffset 0.9s linear, stroke 0.3s" }}
+              />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className={`text-xl font-bold tabular-nums ${timeLeft <= 4 ? "text-red-400" : "text-white"}`}>
+                {timeLeft}
+              </span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-600">seconds left</p>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="mt-auto flex flex-col gap-2">
+        <button
+          onClick={onUndo}
+          disabled={!canUndo}
+          className="w-full py-2 text-sm rounded-lg border border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-600 disabled:opacity-25 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-1.5"
+        >
+          <span>↩</span> Undo
+        </button>
         <button
           onClick={onReset}
           className="w-full py-2 text-sm rounded-lg border border-gray-700 hover:border-gray-500 text-gray-400 hover:text-gray-200 transition-all"
