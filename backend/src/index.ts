@@ -63,11 +63,12 @@ io.on("connection", (socket) => {
       return;
     }
 
-    socket.join(roomCode);
+    const normalized = roomCode.toUpperCase();
+    socket.join(normalized);
     socket.emit("joinedRoom", { playerId: result.playerId });
 
     // Broadcast updated player list to the room
-    io.to(roomCode).emit("roomUpdate", {
+    io.to(normalized).emit("roomUpdate", {
       players: result.room.state.players,
       maxPlayers: result.room.maxPlayers,
     });

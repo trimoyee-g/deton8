@@ -2,18 +2,29 @@ import type { Board, Cell, GameState, Player, PlayerConfig } from "./types";
 
 export function createBoard(rows: number, cols: number): Board {
   return Array.from({ length: rows }, () =>
-    Array.from({ length: cols }, (): Cell => ({ count: 0, player: 0 }))
+    Array.from({ length: cols }, (): Cell => ({ count: 0, player: 0 })),
   );
 }
 
-export function criticalMass(r: number, c: number, rows: number, cols: number): number {
-  const e = (r === 0 || r === rows - 1 ? 1 : 0) + (c === 0 || c === cols - 1 ? 1 : 0);
+export function criticalMass(
+  r: number,
+  c: number,
+  rows: number,
+  cols: number,
+): number {
+  const e =
+    (r === 0 || r === rows - 1 ? 1 : 0) + (c === 0 || c === cols - 1 ? 1 : 0);
   if (e === 2) return 2;
   if (e === 1) return 3;
   return 4;
 }
 
-export function getNeighbors(r: number, c: number, rows: number, cols: number): [number, number][] {
+export function getNeighbors(
+  r: number,
+  c: number,
+  rows: number,
+  cols: number,
+): [number, number][] {
   const n: [number, number][] = [];
   if (r > 0) n.push([r - 1, c]);
   if (r < rows - 1) n.push([r + 1, c]);
@@ -24,11 +35,17 @@ export function getNeighbors(r: number, c: number, rows: number, cols: number): 
 
 export function countOrbsForPlayer(board: Board, player: Player): number {
   let t = 0;
-  for (const row of board) for (const cell of row) if (cell.player === player) t += cell.count;
+  for (const row of board)
+    for (const cell of row) if (cell.player === player) t += cell.count;
   return t;
 }
 
-export function canPlaceOrb(board: Board, r: number, c: number, player: Player): boolean {
+export function canPlaceOrb(
+  board: Board,
+  r: number,
+  c: number,
+  player: Player,
+): boolean {
   return board[r][c].player === 0 || board[r][c].player === player;
 }
 
@@ -40,16 +57,15 @@ function resolveExplosions(
   board: Board,
   player: Player,
   rows: number,
-  cols: number
+  cols: number,
+  r: number,
+  c: number,
 ): void {
+  if (board[r][c].count < criticalMass(r, c, rows, cols)) return;
   const queue: [number, number][] = [];
   let head = 0;
   const MAX_ITER = 8000;
-
-  for (let r = 0; r < rows; r++)
-    for (let c = 0; c < cols; c++)
-      if (board[r][c].count >= criticalMass(r, c, rows, cols)) queue.push([r, c]);
-
+  queue.push([r, c]);
   while (head < queue.length && head < MAX_ITER) {
     const [r, c] = queue[head++];
     const cm = criticalMass(r, c, rows, cols);
@@ -59,16 +75,21 @@ function resolveExplosions(
     for (const [nr, nc] of getNeighbors(r, c, rows, cols)) {
       board[nr][nc].count += 1;
       board[nr][nc].player = player;
-      if (board[nr][nc].count >= criticalMass(nr, nc, rows, cols)) queue.push([nr, nc]);
+      if (board[nr][nc].count >= criticalMass(nr, nc, rows, cols))
+        queue.push([nr, nc]);
     }
   }
 }
 
-function nextAlive(board: Board, cur: Player, players: PlayerConfig[], moves: number): Player {
+function nextAlive(
+  cur: Player,
+  players: PlayerConfig[],
+  moves: number,
+): Player {
   const idx = players.findIndex((p) => p.id === cur);
   for (let i = 1; i <= players.length; i++) {
     const next = players[(idx + i) % players.length];
-    if (moves < players.length || countOrbsForPlayer(board, next.id) > 0) return next.id;
+    if (moves < players.length || next.orbCount > 0) return next.id;
   }
   return cur;
 }
@@ -78,14 +99,24 @@ export function applyMove(state: GameState, r: number, c: number): GameState {
 
   const board = cloneBoard(state.board);
   board[r][c] = { count: board[r][c].count + 1, player: state.currentPlayer };
-  resolveExplosions(board, state.currentPlayer, state.rows, state.cols);
+  resolveExplosions(board, state.currentPlayer, state.rows, state.cols, r, c);
 
   const newMoveCount = state.moveCount + 1;
 
-  const updatedPlayers: PlayerConfig[] = state.players.map((p) => {
-    const orbCount = countOrbsForPlayer(board, p.id);
-    return { ...p, orbCount, alive: orbCount > 0 || newMoveCount < state.players.length };
-  });
+  const counts = new Map<Player, number>();
+
+  for (const row of board) {
+    for (const cell of row) {
+      if (cell.player !== 0) {
+        counts.set(cell.player, (counts.get(cell.player) ?? 0) + cell.count);
+      }
+    }
+  }
+  const updatedPlayers = state.players.map((p) => ({
+    ...p,
+    orbCount: counts.get(p.id) ?? 0,
+    alive: (counts.get(p.id) ?? 0) > 0 || newMoveCount < state.players.length,
+  }));
 
   let winner: Player | null = null;
   if (newMoveCount >= state.players.length) {
@@ -95,7 +126,7 @@ export function applyMove(state: GameState, r: number, c: number): GameState {
 
   const next = winner
     ? state.currentPlayer
-    : nextAlive(board, state.currentPlayer, state.players, newMoveCount);
+    : nextAlive(state.currentPlayer, updatedPlayers, newMoveCount);
 
   return {
     ...state,
@@ -110,11 +141,15 @@ export function applyMove(state: GameState, r: number, c: number): GameState {
 
 export function skipTurn(state: GameState): GameState {
   const newMoveCount = state.moveCount + 1;
-  const next = nextAlive(state.board, state.currentPlayer, state.players, newMoveCount);
+  const next = nextAlive(state.currentPlayer, state.players, newMoveCount);
   return { ...state, currentPlayer: next, moveCount: newMoveCount };
 }
 
-export function initGame(players: PlayerConfig[], rows: number, cols: number): GameState {
+export function initGame(
+  players: PlayerConfig[],
+  rows: number,
+  cols: number,
+): GameState {
   return {
     board: createBoard(rows, cols),
     currentPlayer: players[0].id,
