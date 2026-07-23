@@ -318,7 +318,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Deployment
 
-The frontend is deployed on Vercel and the backend on Railway.
+The frontend is deployed on Vercel and the backend on Render (free tier, see `render.yaml`).
 GitHub Actions automatically builds and publishes Docker images to Docker Hub on every push to `main`.
 > Hot Seat and vs Computer work on the Vercel frontend alone — no backend needed.
 

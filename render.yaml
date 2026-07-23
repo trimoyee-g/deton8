@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: deton8-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /
+    # Render injects PORT automatically; the server reads process.env.PORT.
